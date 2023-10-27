@@ -11,7 +11,9 @@ int main (int argc, char** argv)
 	struct sockaddr_in server_address;	// naming the server's listening socket
 	
 	// list of clients currently in the chatroom
-	struct chat_node_list* my_client_list = chat_node_list_init();
+	struct chat_node_list* my_client_list = (struct chat_node_list*)malloc(
+		sizeof(struct chat_node_list)
+	);
 
 	// packaged arguements the client_handler() will need
 	struct handler_args* handler_args = (struct handler_args*)malloc(
@@ -57,8 +59,8 @@ int main (int argc, char** argv)
 
 	// indicate server is about to enter server loop
 	printf("Server started:\n");
-	printf("IP Address: %s\n", SERVER_ADDR);
-	printf("Port number: %d\n", PORT);
+	printf("IP Address: %u\n", server_address.sin_addr.s_addr);
+	printf("Port number: %u\n", server_address.sin_port);
 
 	// server loop
 	while (TRUE)
@@ -67,7 +69,9 @@ int main (int argc, char** argv)
 
 		// accept client
 		int client_socket = accept(server_socket, NULL, NULL);
+		
 		printf("\nServer with PID %d: accepted client\n", getpid());
+		handler_args->sock = client_socket;
 
 		// create and relegate client to dedicated thread
 		pthread_t thread;
@@ -85,6 +89,11 @@ int main (int argc, char** argv)
 		}
 	}
 
+	if (close(server_socket) == -1)
+	{
+		perror("Error closing server socket");
+		exit(EXIT_FAILURE);
+	}
 	pthread_mutex_destroy(&mutex);
 	return EXIT_SUCCESS;
 }

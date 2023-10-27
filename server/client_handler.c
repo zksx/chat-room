@@ -1,78 +1,184 @@
 #include "client_handler.h"
 
-
 /* function implementation */
-void* client_handler(void* _args)
+void* client_handler(void* _handler_args)
 {
-	printf("client handler called here!\n");
-	// cast incoming arguments back to handler_args
-	// extract socket
-	// allocate memory for a message
-	
-	// unlock mutex
-	
+	// extract passed arguments
+	struct handler_args* ha = (struct handler_args*)_handler_args;
+
+	// giving client_socket it's own variable
+	int client_socket = *((int*)&ha->sock);
+
+	// allocate memory for incoming message
+	struct message* rec_msg = (struct message*)malloc(sizeof(struct message));
+	rec_msg->note = (struct note*)malloc(sizeof(struct note));
+	// allocate memory for out going message
+	struct message* send_msg = (struct message*)malloc(sizeof(struct message));
+	send_msg->note = (struct note*)malloc(sizeof(struct note));
+
 	// read a message from the socket
+	read_message(rec_msg, client_socket);
+
+	printf(
+		"Received message from %s on port %d\n",
+		ip_ntop(rec_msg->ip_addr), rec_msg->port
+	);
+	printf(
+		"[%s] %s: %hhu\n",
+		rec_msg->note->username,
+		rec_msg->note->sentence,
+		rec_msg->note->length
+	);
+
+	// set ambiguous message and note information
+	send_msg->port = rec_msg->port;
+	send_msg->ip_addr = rec_msg->ip_addr;
+	memset(send_msg->note->sentence, 0, LEN_SENTENCE);
+	strcpy(send_msg->note->username, rec_msg->note->username);
 	
 	// switch based on message type
+	switch (rec_msg->type)
 	{
-		// case JOIN
-			// lock mutex
-			
-			// initialize join message
+		case JOIN:
+			// set message information
+			send_msg->type = JOIN;
+
+			// set note information
+			strcpy(send_msg->note->sentence, "has joined the room!");
+			send_msg->note->length = 25;	// client always sends same message
+
+			struct chat_node* new_client = (struct chat_node*)malloc(sizeof(struct chat_node));
+			new_client->port = rec_msg->port;
+			new_client->ip_addr = rec_msg->ip_addr;
+			new_client->next_node = NULL;
 
 			// add new client to list of chat nodes
+			add_chat_node(ha->client_list, new_client);
+			printf(
+				"\t\tAdded client at %s on port %d to the list\n",
+				ip_ntop(new_client->ip_addr), new_client->port
+			);
+			printf("\t\tRoom size: %zu\n", ha->client_list->size);
+			break;
 
-			// notify chat room of join
+		case LEAVE:
+			send_msg->type = LEAVE;
 
-			// send join message
+			strcpy(send_msg->note->sentence, "has left the room!");
 
-			// unlock mutex
-			// break
-		// case LEAVE
-			// lock mutex
+			remove_chat_node(&ha->client_list, rec_msg->ip_addr);
+			printf(
+				"\t\tRemoved client at %s on port %d from list\n",
+				ip_ntop(rec_msg->ip_addr), rec_msg->port
+			);
+			printf("\t\tRoom size: %zu\n", ha->client_list->size);
+			break;
+
+		case SHUTDOWN:
+			send_msg->type = LEAVE;
 			
-			// remove client from list of chat nodes
+			strcpy(send_msg->note->sentence, "has left the room!");
 
-			// notify chat room of leave
+			remove_chat_node(&ha->client_list, rec_msg->ip_addr);
+			printf(
+				"\t\tRemoved client at %s on port %d from list\n",
+				ip_ntop(rec_msg->ip_addr), rec_msg->port
+			);
+			printf("\t\tRoom size: %zu\n", ha->client_list->size);
+			break;
 
-			// send leave message
+		case SHUTDOWN_ALL:
+			send_msg->type = SHUTDOWN_ALL;
 
-			// unlock mutex
-			// break
-		// case SHUTDOWN
-			// lock mutex
+			strcpy(send_msg->note->sentence, "has shutdown the room!");
 
-			// initialize leave message
+			// notify room of shutdown
+			send_msg_to_room(ha->client_list, send_msg);
 
-			// remove client from list of chat nodes
-
-			// notify chat room of leave
-
-			// send shutdown message
-
-			// unlock mutex
-			// break
-		// case SHUTDOWN_ALL
-			// lock mutex
-
-			// initialize leave message
-
-			// send leave message to all chat nodes
-
-			// destroy chat node list
-
-			// unlock mutex
-			// break
-		// assume NOTE
-			// initialize note message
-
-			// send note message to all chat nodes
+			clear_chat_node_list(&ha->client_list);
 			
-			// break
+			// unlock mutex
+			pthread_mutex_unlock(ha->mutex);
+
+			// exit function
+			if (close(client_socket) == -1)
+			{
+				perror("Error closing client socket");
+				exit(EXIT_FAILURE);
+			}
+			pthread_exit(NULL);	
+			break;
+
+		default:
+			send_msg->type = NOTE;
+			strcpy(send_msg->note->sentence, rec_msg->note->sentence);
+			break;
 	}
 
+	// forward message to room
+	send_msg_to_room(ha->client_list, send_msg);
+	
+	// unlock mutex
+	pthread_mutex_unlock(ha->mutex);
+
 	// exit function
-	// close socket
-	pthread_exit(NULL);
+	if (close(client_socket) == -1)
+	{
+		perror("Error closing client socket");
+		exit(EXIT_FAILURE);
+	}
+	pthread_exit(NULL);	
+}
+
+
+void send_msg_to_room(struct chat_node_list* _list, struct message* _msg)
+{
+	//printf("\n\t\tsend message to room called here!\n");
+	struct chat_node* wrk_node = _list->head;
+
+	while (wrk_node != NULL)
+	{
+		if(_msg->ip_addr != wrk_node->ip_addr)
+		{
+			int sock;
+			struct sockaddr_in send_addr;
+			
+			// create socket for sending
+			if ((sock = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+			{
+				perror("Error creating socket");
+				exit(EXIT_FAILURE);
+			}
+
+			// set the address family
+			send_addr.sin_family = AF_INET;
+			// convert node's IP address and set the address
+			send_addr.sin_addr.s_addr = inet_addr(ip_ntop(wrk_node->ip_addr));
+			// set the port number
+			send_addr.sin_port = htons(wrk_node->port);
+
+			printf(
+				"Connecting %u on port %u...\n",
+				send_addr.sin_addr.s_addr, send_addr.sin_port
+			);
+			// connect to client's socket
+			if (connect(sock, (struct sockaddr*)&send_addr, sizeof(send_addr)) == -1)
+			{
+				// report connection error
+				perror("Error connection unsuccessful");
+				exit(EXIT_FAILURE);
+			}
+		
+			write_message(_msg, sock);
+			printf("\nWrote message to %s\n", ip_ntop(wrk_node->ip_addr));
+			
+			if (close(sock) == -1)
+			{
+				perror("Error closing client socket");
+				exit(EXIT_FAILURE);
+			}
+		}
+		wrk_node = wrk_node->next_node;
+	}
 }
 

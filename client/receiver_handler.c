@@ -6,113 +6,141 @@ pthread_mutex_t mutex;
 
 
 /* function implementation */
-void* receiver_handler(void* _)
+void* receiver_handler(void* receiver_port)
 {
-	printf("receiver handler called here!\n");
 	// define networking information
+	int receiver_socket;	// descriptor of reciever's socket
+	struct sockaddr_in receiver_address;	// nameing the reciever's listening socket
 
 	// initialize mutex
+	pthread_mutex_init(&mutex, NULL);
 
-	// create client disconnect signal
+	signal(SIGPIPE, SIG_IGN);	// sent on client disconnects
 	
-	// create socket
+	if ((receiver_socket = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 	{
 		// report socket creation error
-		// exit program
+		perror("Error creating socket");
+		exit(EXIT_FAILURE);
 	}
 	
-	// initialize networking information
+	receiver_address.sin_family = AF_INET;	// define IP family
+	receiver_address.sin_addr.s_addr = htonl(INADDR_ANY);	// accept on any port
+	receiver_address.sin_port = htons(*((int*)receiver_port));	// port to listen on
 	
-	// bind socket to port
+	if (bind(
+			receiver_socket,
+			(struct sockaddr*)&receiver_address,
+			sizeof(receiver_address)
+		) != 0
+	)
 	{
 		// report binding error
-		// exit program
+		perror("Error binding socket");
+		exit(EXIT_FAILURE);
 	}
 
-	// start listening on port
+	if (listen(receiver_socket, NUM_CONNECTIONS) != 0)
 	{
 		// report listening error
-		// exit program
+		perror("Error listening on socket");
+		exit(EXIT_FAILURE);
 	}
 
-	// start server loop
+	/*
+	printf("Receiver started:\n");
+	printf("IP: %u\n", receiver_address.sin_addr.s_addr);
+	printf("Port: %u\n", receiver_address.sin_port);
+	*/
+
+	// start receiver loop
+	while (TRUE)
 	{
-		// lock mutex
+		pthread_mutex_lock(&mutex);
 
 		// accept client connection
+		int conn_socket = accept(receiver_socket, NULL, NULL);
 
 		// start deticated client thread
+		pthread_t thread;
+		if (pthread_create(
+				&thread, NULL,
+				handle_conn, (void*)&conn_socket
+			) != 0
+		)
 		{
 			// report thread creation error
-			// exit program
+			perror("Error creating thread for connection");
+			exit(EXIT_FAILURE);
 		}
 
-		// detach thread
+		if (pthread_detach(thread) != 0)
 		{
 			// report thread detachment error
-			// exit program
+			perror("Error detaching thread");
+			exit(EXIT_FAILURE);
 		}
 	}
 
-	// destroy mutex
+	// exit function
+	if (close(receiver_socket) == -1)
+	{
+		perror("Error closing receiver socket");
+		exit(EXIT_FAILURE);
+	}
+	pthread_mutex_destroy(&mutex);
+	printf("end of receiver handler!\n");
 	pthread_exit(NULL);	// reports status of conn to chatroom
 }
 
 void* handle_conn(void* _sock)
 {
-	printf("handle conn called here!\n");
 	// copy conn socket
-	// default message structure
-
-	// unlock mutex
-
-	// read message
+	int conn_socket = *((int*)_sock);
 	
-	// switch based on message type
+	// unlock mutex
+	pthread_mutex_unlock(&mutex);
+
+	// default message structure
+	struct message* msg = (struct message*)malloc(sizeof(struct message));
+	msg->note = (struct note*)malloc(sizeof(struct note));
+
+	read_message(msg, conn_socket);
+	
+	switch(msg->type)
 	{
-		// case JOIN
-			// print joining log
+		case JOIN:
+			fprintf(stdout, "%s%s %s%s%s\n", AC_RED, msg->note->username, 
+									 AC_GREEN, msg->note->sentence,
+									 AC_NORMAL);
+			break;
 
-		// case LEAVE
-			// print leaving log
+		case LEAVE:
+			fprintf(stdout, "%s%s %s%s%s\n", AC_RED, msg->note->username, 
+									 AC_GREEN, msg->note->sentence,
+									 AC_NORMAL);
+			break;
 
-		// case SHUTDOWN
-			// print shutdown log
+		case SHUTDOWN_ALL:
+			fprintf(stdout, "%s[%s] %s%s%s\n", AC_RED, msg->note->username, 
+									 AC_GREEN, msg->note->sentence,
+									 AC_NORMAL);
+			exit(EXIT_SUCCESS);
+			break;
 
-		// assume NOTE
-			// print message
+		default:	
+			fprintf(stdout, "%s[%s] %s%s\n", AC_RED, msg->note->username, 
+									   AC_NORMAL, msg->note->sentence);
+			break;
 	}
 
-	// close socket
+	// exit function
+	if (close(conn_socket) != 0)
 	{
 		// report closing socket error
-		// exit program
+		perror("Error closing client connection");
+		exit(EXIT_FAILURE);
 	}
-
 	pthread_exit(NULL);
-}
-
-int read_complete(int _sock, int* int_value_ptr, size_t size)
-{
-	printf("read complete called here!\n");
-	// define bytes read
-	
-	// loop until all bytes left is 0
-	{
-		// read from network into int_value_ptr
-
-		// check all bytes read
-		{
-			// return all bytes read
-		}
-		// check no bytes read
-		{
-			// return no bytes read
-		}
-
-		// shift int_value_ptr data left by bytes remaining
-	}
-
-	return -1;
 }
 

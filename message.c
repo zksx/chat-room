@@ -5,82 +5,35 @@
 
 
 /* function implementation */
-struct message* default_message(void)
+void read_message(struct message* _msg, int _sock)
 {
-	struct message* m = (struct message*)malloc(sizeof(struct message));
-	
-	m->type = NOTE;
-	m->ip_addr[0] = 0;
-	m->ip_addr[1] = 0;
-	m->ip_addr[2] = 0;
-	m->ip_addr[3] = 0;
-	m->port = 0;
-	m->note = default_note();
+	read(_sock, &_msg->type, sizeof(uint8_t));
+	read_complete(_sock, &_msg->port, sizeof(int));
+	read_complete(_sock, &_msg->ip_addr, sizeof(unsigned int));
 
-	return m;
-}
-
-struct note* default_note(void)
-{
-	struct note* n = (struct note*)malloc(sizeof(struct note));
-	
-	n->length = 0;
-	
-	return n;
-}
-
-struct message* message_init(uint8_t _type, uint8_t* _ip_addr, int _port, struct note* _node)
-{
-	// allocate new memory for a message
-
-	// set type to incoming type
-	// set ip address to incoming ip address
-	// set port to incoming port
-	// set note to incoming note
-	
-	// return message pointer
-	return NULL;
-}
-
-struct note* note_init(char* _username, char* _sentence, uint8_t _len)
-{
-	// allocate new memory for a note
-
-	// set username to incoming username
-	// set sentence to incoming sentence
-	// set length to incoming length
-	
-	// return note pointer
-	return NULL;
-}
-
-void read_message(struct message* _message)
-{
-	// read message type to socket
-	// read ip address to socket
-	// read port to socket
-	// read note
+	read_note(_msg->note, _sock);
 }
 
 void read_note(struct note* _note, int _sock)
 {
-	// read username to socket
-	// read sentence to socket
-	// read length to socket
+	read(_sock, &_note->username, sizeof(char) * LEN_USERNAME);
+	read(_sock, &_note->sentence, sizeof(char) * LEN_SENTENCE);
+	read_complete(_sock, &_note->length, sizeof(uint8_t));
 }
 
-void write_message(struct message* _message)
+void write_message(struct message* _msg, int _sock)
 {
-	// write message type to socket
-	// write ip address to socket
-	// write port to socket
-	// write note
+	write(_sock, &_msg->type, sizeof(uint8_t));
+	write(_sock, &_msg->port, sizeof(int));
+	write(_sock, &_msg->ip_addr, sizeof(unsigned int));
+
+	write_note(_msg->note, _sock);
 }
 
 void write_note(struct note* _note, int _sock)
 {
-	// write username to socket
-	// write sentence to socket
-	// write length to socket
+	write(_sock, &_note->username, sizeof(char) * LEN_USERNAME);
+	write(_sock, &_note->sentence, sizeof(char) * LEN_SENTENCE);
+	write(_sock, &_note->length, sizeof(uint8_t));
 }
 

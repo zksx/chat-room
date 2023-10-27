@@ -8,87 +8,87 @@
 void add_chat_node(struct chat_node_list* _list, struct chat_node* _node)
 {
 	// check list has data
+	if (_list->size > 0)
 	{
 		// initialize working node with head
+		struct chat_node* wrk_node = _list->head;
 
 		// loop until last node is found
+		while (wrk_node->next_node != NULL)
 		{
-			// check working node is equivalent to incoming node
-			{
-				// break because client is already in the room
-			}
-			
-			// advance working node
+			wrk_node = wrk_node->next_node;
 		}
 
 		// point last node's next pointer to incoming node
+		wrk_node->next_node = _node;
 	}
 	// otherwise, assume list is empty
+	else
 	{
-		// point head to node
-		
-		// increment size
-	}
-}
-
-struct chat_node* chat_node_init(uint8_t* _ip_addr, int _port)
-{
-	// allocate memory for a new node
-
-	// set ip address to ip_addr
-	
-	// set port number to port
-	
-	// return pointer to new node
-	return NULL;
-}
-
-struct chat_node_list* chat_node_list_init(void)
-{
-	// allocate memory for a new list
-
-	// set size to zero
-	
-	// set head to NULL
-	
-	// return pointer to new list
-	return NULL;
-}
-
-void remove_chat_node(struct chat_node_list* _list, size_t _ip_addr)
-{
-	// initialize working node with head node
-	
-	// loop until working node points to null
-	{
-		// check next node's ip address equal to expected ip address
-		{
-			// break
-		}
-
-		// advance working node
+		_list->head = _node;
 	}
 
-	// check working node is not NULL
-	{
-		// point next node pointer to next node's next pointer
-	}
+	_list->size += 1;
 }
 
-void destroy_chat_node_list(struct chat_node_list* _list)
+void chat_node_list_init(struct chat_node_list* _list)
 {
-	// initialize working node with head node
-	// initialize previous node with working node
+	_list = (struct chat_node_list*)malloc(sizeof(struct chat_node_list));
+
+	_list->size = 0;
+	_list->head = NULL;
+}
+
+void clear_chat_node_list(struct chat_node_list** _list)
+{
+	struct chat_node* wrk_node = (*_list)->head;
+	struct chat_node* prev_node = wrk_node;
 
 	// loop until previous node is NULL
+	while (prev_node == NULL)
 	{
-		// advance working node
+		wrk_node = wrk_node->next_node;
 
-		// free previous node
+		free(prev_node);
 
-		// point previuos node to working node
+		prev_node = wrk_node;
 	}
+}
 
-	// free list
+void remove_chat_node(struct chat_node_list** _list, unsigned int _ip_addr)
+{
+	struct chat_node* remove_node = (*_list)->head;
+
+	if ((*_list)->head != NULL && remove_node->ip_addr == _ip_addr)
+	{
+		(*_list)->head = (*_list)->head->next_node;
+		free(remove_node);
+		(*_list)->size -= 1;
+	}
+	else if ((*_list)->head != NULL)
+	{
+		// initialize working node with head node
+		struct chat_node* wrk_node = remove_node;
+		
+		// loop until penultimate node found
+		while (wrk_node->next_node != NULL)
+		{
+			// check next node's ip address equal to expected ip address
+			if (wrk_node->next_node->ip_addr == _ip_addr)
+			{
+				remove_node = wrk_node->next_node;
+				break;	// node to remove is found
+			}
+
+			wrk_node = wrk_node->next_node;
+		}
+
+		if (wrk_node != NULL)
+		{
+			wrk_node->next_node = wrk_node->next_node->next_node;
+			free(remove_node);
+			(*_list)->size -= 1;
+		}
+	}
 }
 
